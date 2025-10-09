@@ -1,8 +1,29 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import NewsForm from '../components/NewsForm';
 import NewsList from '../components/NewsList';
 import './AdminNewsPage.css';
+
+// API base URL from environment variable
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+
+// Mock data for fallback when API is not available
+const mockNews = [
+  {
+    id: 1,
+    title: "Tech Conference 2024 Announced",
+    description: "Join us for the biggest technology conference of the year featuring the latest innovations in AI, blockchain, and cloud computing. This event will bring together industry leaders, innovators, and tech enthusiasts from around the world.",
+    images: ["https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400", "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=400"],
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 2,
+    title: "New Product Launch",
+    description: "We're excited to announce the launch of our revolutionary new product that will change the way you work and communicate with your team members.",
+    images: ["https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400"],
+    createdAt: new Date().toISOString()
+  }
+];
 
 const AdminNewsPage = () => {
   const [news, setNews] = useState([]);
@@ -10,87 +31,76 @@ const AdminNewsPage = () => {
   const [error, setError] = useState(null);
   const [editingNews, setEditingNews] = useState(null);
 
-  // Mock data for demo purposes (replace with real API calls)
-  const mockNews = [
-    {
-      id: 1,
-      title: "Tech Conference 2024 Announced",
-      description: "Join us for the biggest technology conference of the year featuring the latest innovations in AI, blockchain, and cloud computing. This event will bring together industry leaders, innovators, and tech enthusiasts from around the world.",
-      images: ["https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400", "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=400"],
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: 2,
-      title: "New Product Launch",
-      description: "We're excited to announce the launch of our revolutionary new product that will change the way you work and communicate with your team members.",
-      images: ["https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400"],
-      createdAt: new Date().toISOString()
-    }
-  ];
-
-  useEffect(() => {
-    fetchNews();
-  }, []);
-
-  const fetchNews = async () => {
+  const fetchNews = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Try to fetch from real API
+      const response = await axios.get(`${API_BASE_URL}/api/news`, {
+        timeout: 5000 // 5 second timeout
+      });
+      setNews(response.data);
       
-      // For demo purposes, use mock data
-      // Replace this with real API call:
-      // const response = await axios.get('/api/news');
-      // setNews(response.data);
-      
-      setNews(mockNews);
     } catch (err) {
-      setError('Failed to fetch news. Please try again later.');
-      console.error('Error fetching news:', err);
+      console.error('API Error:', err);
+      
+      // Fallback to mock data for demo
+      setNews(mockNews);
+      setError('Demo Mode: Using sample data. Connect your backend API for live data.');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchNews();
+  }, [fetchNews]);
 
   const handleAddNews = async (formData) => {
     try {
       setError(null);
       
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // For demo purposes, add to local state
-      // Replace this with real API call:
-      /*
+      // Prepare FormData for API
       const data = new FormData();
       data.append('title', formData.title);
       data.append('description', formData.description);
-      formData.images.forEach((image, index) => {
-        data.append(`images`, image);
+      formData.images.forEach((image) => {
+        data.append('images', image);
       });
       
-      const response = await axios.post('/api/news', data, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      */
+      // Try real API call first
+      try {
+        const response = await axios.post(`${API_BASE_URL}/api/news`, data, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          timeout: 10000
+        });
+        
+        setNews(prev => [response.data, ...prev]);
+        alert('News added successfully!');
+        return;
+        
+      } catch (apiError) {
+        console.error('API Error:', apiError);
+        
+        // Fallback to demo mode
+        const newNews = {
+          id: Date.now(),
+          title: formData.title,
+          description: formData.description,
+          images: formData.images.map(file => {
+            if (typeof file === 'string') return file;
+            return URL.createObjectURL(file);
+          }),
+          createdAt: new Date().toISOString()
+        };
+        
+        setNews(prev => [newNews, ...prev]);
+        setError('Demo Mode: News added locally (backend API not available)');
+      }
       
-      const newNews = {
-        id: Date.now(),
-        title: formData.title,
-        description: formData.description,
-        images: formData.images.map(file => {
-          if (typeof file === 'string') return file;
-          return URL.createObjectURL(file);
-        }),
-        createdAt: new Date().toISOString()
-      };
-      
-      setNews(prev => [newNews, ...prev]);
-      alert('News added successfully!');
     } catch (err) {
       setError('Failed to add news. Please try again.');
       console.error('Error adding news:', err);
@@ -102,34 +112,44 @@ const AdminNewsPage = () => {
     try {
       setError(null);
       
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // For demo purposes, update local state
-      // Replace this with real API call:
-      /*
+      // Prepare FormData for API
       const data = new FormData();
       data.append('title', formData.title);
       data.append('description', formData.description);
-      formData.images.forEach((image, index) => {
-        data.append(`images`, image);
+      formData.images.forEach((image) => {
+        data.append('images', image);
       });
       
-      const response = await axios.put(`/api/news/${newsId}`, data, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      */
+      // Try real API call first
+      try {
+        const response = await axios.put(`${API_BASE_URL}/api/news/${newsId}`, data, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+          timeout: 10000
+        });
+        
+        setNews(prev => prev.map(item => 
+          item.id === newsId ? response.data : item
+        ));
+        
+        setEditingNews(null);
+        alert('News updated successfully!');
+        
+      } catch (apiError) {
+        console.error('API Error:', apiError);
+        
+        // Fallback to demo mode
+        setNews(prev => prev.map(item => 
+          item.id === newsId 
+            ? { ...item, title: formData.title, description: formData.description, images: formData.images }
+            : item
+        ));
+        
+        setEditingNews(null);
+        setError('Demo Mode: News updated locally (backend API not available)');
+      }
       
-      setNews(prev => prev.map(item => 
-        item.id === newsId 
-          ? { ...item, title: formData.title, description: formData.description, images: formData.images }
-          : item
-      ));
-      
-      setEditingNews(null);
-      alert('News updated successfully!');
     } catch (err) {
       setError('Failed to update news. Please try again.');
       console.error('Error updating news:', err);
@@ -145,15 +165,23 @@ const AdminNewsPage = () => {
     try {
       setError(null);
       
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // Try real API call first
+      try {
+        await axios.delete(`${API_BASE_URL}/api/news/${newsId}`, {
+          timeout: 5000
+        });
+        
+        setNews(prev => prev.filter(item => item.id !== newsId));
+        alert('News deleted successfully!');
+        
+      } catch (apiError) {
+        console.error('API Error:', apiError);
+        
+        // Fallback to demo mode
+        setNews(prev => prev.filter(item => item.id !== newsId));
+        setError('Demo Mode: News deleted locally (backend API not available)');
+      }
       
-      // For demo purposes, remove from local state
-      // Replace this with real API call:
-      // await axios.delete(`/api/news/${newsId}`);
-      
-      setNews(prev => prev.filter(item => item.id !== newsId));
-      alert('News deleted successfully!');
     } catch (err) {
       setError('Failed to delete news. Please try again.');
       console.error('Error deleting news:', err);

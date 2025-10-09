@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import axios from 'axios';
 import NewsForm from '../components/NewsForm';
 import NewsList from '../components/NewsList';
 import './AdminNewsPage.css';
